@@ -67,13 +67,13 @@ class Dataset:
         else:
             self._default_load()
 
-         # Verify loaded data is properly sized
+        # Verify loaded data is properly sized
         assert len(self.input_X) % self.mubatch_size == 0
         assert len(self.input_X) % self.local_batch_size == 0
         assert len(self.input_X) == len(self.target_y)
 
-        def _default_load(self) -> None:
-         """Default data loading implementation"""
+    def _default_load(self) -> None:
+        """Default data loading implementation"""
         suffix = "val" if self.is_validation else "train"
         
         # Load full dataset
@@ -90,69 +90,69 @@ class Dataset:
         self.input_X = input_X[self.DP_rank:full_tiles_length:self.DP_size].copy()
         self.target_y = target_y[self.DP_rank:full_tiles_length:self.DP_size].copy()
 
-        def __len__(self) -> int:
-            """Return the length of the dataset for this process"""
-            if self.input_X is None:
-                raise RuntimeError("Dataset must be loaded before length can be determined")
-            return len(self.input_X)
+    def __len__(self) -> int:
+        """Return the length of the dataset for this process"""
+        if self.input_X is None:
+            raise RuntimeError("Dataset must be loaded before length can be determined")
+        return len(self.input_X)
     
-        def get_num_batches(self) -> int:
-            """Get the number of local batches for this process"""
-            return len(self) // self.local_batch_size
+    def get_num_batches(self) -> int:
+        """Get the number of local batches for this process"""
+        return len(self) // self.local_batch_size
     
-        def get_num_mubatches(self) -> int:
-            """Get the number of microbatches per local batch"""
-            return self.local_batch_size // self.mubatch_size
+    def get_num_mubatches(self) -> int:
+        """Get the number of microbatches per local batch"""
+        return self.local_batch_size // self.mubatch_size
 
-        def batch_iterator(self, batch_id:int)-> Iterator[Tuple[np.ndarray, np.ndarray]]:
-            """
-            Create an iterator that yields microbatches for a given batch.
+    def batch_iterator(self, batch_id:int)-> Iterator[Tuple[np.ndarray, np.ndarray]]:
+        """
+        Create an iterator that yields microbatches for a given batch.
+        
+        Args:
+            batch_id: The index of the batch
             
-            Args:
-                batch_id: The index of the batch
-                
-            Yields:
-                Tuple of (input_X, target_y) for each microbatch
-            """
-            assert 0 <= batch_id < self.get_num_batchers(), "Invalid batch_id"
+        Yields:
+            Tuple of (input_X, target_y) for each microbatch
+        """
+        assert 0 <= batch_id < self.get_num_batches(), "Invalid batch_id"
 
-            start_idx = batch_id * self.local_btach_size
+        start_idx = batch_id * self.local_batch_size
 
-            for mubatch_id in range(self.get_num_mubatches()):
-                mu_start = start_idx + mubatch_id * self.mubatch_size
-                mu_end = mu_start + self.mubatch.size 
+        for mubatch_id in range(self.get_num_mubatches()):
+            mu_start = start_idx + mubatch_id * self.mubatch_size
+            mu_end = mu_start + self.mubatch_size
 
-                yield self.input_X[mu_start:mu_end], self.target_y[mu_start:mu_end]
+            yield self.input_X[mu_start:mu_end], self.target_y[mu_start:mu_end]
 
-        def iterator(self) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
-            """
-            Create an iterator that yields all microbatches in the dataset.
-            
-            Yields:
-                Tuple of (input_X, target_y) for each microbatch
-            """
-            for batch_id in range(self.get_num_batches()):
-                yield from self.batch_iterator(batch_id)
+    def iterator(self) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
+        """
+        Create an iterator that yields all microbatches in the dataset.
+        
+        Yields:
+            Tuple of (input_X, target_y) for each microbatch
+        """
+        for batch_id in range(self.get_num_batches()):
+            yield from self.batch_iterator(batch_id)
 
-        def load_micro_batch_input(self, batch_id: int, mubatch_id: int) -> np.ndarray:
-            """Load input data for a specific microbatch (legacy method)"""
-            assert 0 <= batch_id < self.get_num_batches(), "Invalid batch_id"
-            assert 0 <= mubatch_id < self.get_num_mubatches(), "Invalid mubatch_id"
-            
-            start_idx = batch_id * self.local_batch_size + mubatch_id * self.mubatch_size
-            end_idx = start_idx + self.mubatch_size
-            
-            return self.input_X[start_idx:end_idx]
+    def load_micro_batch_input(self, batch_id: int, mubatch_id: int) -> np.ndarray:
+        """Load input data for a specific microbatch (legacy method)"""
+        assert 0 <= batch_id < self.get_num_batches(), "Invalid batch_id"
+        assert 0 <= mubatch_id < self.get_num_mubatches(), "Invalid mubatch_id"
+        
+        start_idx = batch_id * self.local_batch_size + mubatch_id * self.mubatch_size
+        end_idx = start_idx + self.mubatch_size
+        
+        return self.input_X[start_idx:end_idx]
     
-        def load_micro_batch_target(self, batch_id: int, mubatch_id: int) -> np.ndarray:
-            """Load target data for a specific microbatch (legacy method)"""
-            assert 0 <= batch_id < self.get_num_batches(), "Invalid batch_id"
-            assert 0 <= mubatch_id < self.get_num_mubatches(), "Invalid mubatch_id"
-            
-            start_idx = batch_id * self.local_batch_size + mubatch_id * self.mubatch_size
-            end_idx = start_idx + self.mubatch_size
-            
-            return self.target_y[start_idx:end_idx]
+    def load_micro_batch_target(self, batch_id: int, mubatch_id: int) -> np.ndarray:
+        """Load target data for a specific microbatch (legacy method)"""
+        assert 0 <= batch_id < self.get_num_batches(), "Invalid batch_id"
+        assert 0 <= mubatch_id < self.get_num_mubatches(), "Invalid mubatch_id"
+        
+        start_idx = batch_id * self.local_batch_size + mubatch_id * self.mubatch_size
+        end_idx = start_idx + self.mubatch_size
+        
+        return self.target_y[start_idx:end_idx]
 
 
     
