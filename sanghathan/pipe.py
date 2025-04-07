@@ -368,9 +368,18 @@ class Worker:
         # send forwards
         self.pp_comm.Send(self.output_buffers[buffer_id], self.get_successor())
 
-    def recv_activations(self, buffer_id):
-        # receive from previous
-        self.pp_comm.Recv(self.input_buffers[buffer_id], self.get_predecessor())
+    def recv_activations(self, buffer_id, **kwargs):
+        """Receive activations from the previous stage."""
+        try:
+            # Check buffer size
+            buf = self.input_buffers[buffer_id]
+            print(f"Worker {self.stage_id} receiving into buffer {buffer_id} with shape {buf.shape}")
+            
+            # Receive data
+            self.pp_comm.Recv(buf, self.get_predecessor())
+        except Exception as e:
+            print(f"Error receiving activations in worker {self.stage_id}: {str(e)}")
+            raise
 
     def send_grad(self, buffer_id):
         # send backwards
@@ -431,28 +440,36 @@ class Worker:
         SendInputGrad: send_grad,
     }
 
-    def execute(self, sched, batch_id):
-        """
-        Setup buffers and use the configured schedule to execute a full batch
+  # In sanghathan/pipe.py
 
-        Basically it'll just call the right function, given whatever the scheduler
-        tells it to do
-        """
-
-        # The buffers hold activations during FWD passes and gradients during BWD
-        # activation.shape == grad.shape, hence we can reuse the same buffers for FWD & BWD
-        # TODO make buffers persistent for the whole training run by setting μBatch-size
-        #    and schedule during __init__. Implement a worker.teardown() for free'ing the buffers.
-        assert sched.num_buffers % 2 == 0
-        self.input_buffers = [
-            np.empty((self.dataset.mubatch_size, self.model.in_dim), dtype=np.float32)
-            for _ in range(sched.num_buffers // 2)
-        ]
-        self.output_buffers = [
-            np.empty((self.dataset.mubatch_size, self.model.out_dim), dtype=np.float32)
-            for _ in range(sched.num_buffers // 2)
-        ]
-
+def execute(self, sched, batch_id):
+    """
+    Setup buffers and use the configured schedule to execute a full batch
+    """
+    assert sched.num_buffers % 2 == 0
+    
+    # Get buffer dimensions explicitly
+    input_dim = self.model.in_dim
+    output_dim = self.model.out_dim
+    mubatch_size = self.dataset.mubatch_size
+    
+    # Print dimensions for debugging
+    print(f"Worker {self.stage_id}: Buffer dims - input: {input_dim}, output: {output_dim}, batch: {mubatch_size}")
+    
+    # Create properly sized buffers 
+    self.input_buffers = [
+        np.zeros((mubatch_size, input_dim), dtype=np.float32)
+        for _ in range(sched.num_buffers // 2)
+    ]
+    self.output_buffers = [
+        np.zeros((mubatch_size, output_dim), dtype=np.float32)
+        for _ in range(sched.num_buffers // 2)
+    ]
+    
+    # Ensure MPI buffers are properly synchronized
+    self.pp_comm.Barrier()
+    
+    try:
         for commands in sched.steps():
             for command in commands:
                 if isinstance(command, LoadInstruction):
@@ -464,3 +481,8 @@ class Worker:
                     self._INSTRUCTION_MAP[type(command)](
                         self, **dataclasses.asdict(command)
                     )
+    except Exception as e:
+        print(f"Error in worker {self.stage_id} (stage) / {self.dp_rank} (dp): {str(e)}")
+        import traceback
+        traceback.print_exc()
+        self.pp_comm.Abort() 
